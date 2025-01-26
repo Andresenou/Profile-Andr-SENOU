@@ -111,6 +111,7 @@ class ExperiencePage extends StatelessWidget {
                 experience.imagePath,
                 fit: BoxFit.cover,
                 width: double.infinity,
+                height: double.infinity,
               ),
             ),
           ),
