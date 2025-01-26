@@ -6,7 +6,7 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-
+//ehdhdhdkjkff
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
