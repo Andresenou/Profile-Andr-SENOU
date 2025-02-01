@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter/services.dart';
 
 class VideosPage extends StatelessWidget {
   final List<String> videoPaths = [
@@ -15,50 +16,132 @@ class VideosPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Videos'),
-        backgroundColor: Colors.deepPurple,
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return ListView.builder(
-            itemCount: videoPaths.length,
-            itemBuilder: (context, index) {
-              // Utiliser MediaQuery pour gérer les tailles d'écran
-              double screenWidth = MediaQuery.of(context).size.width;
-              double videoHeight = screenWidth > 600 ? 400 : 250; // Ajuster la hauteur de la vidéo
-
-              return VideoPlayerItem(
-                videoPath: videoPaths[index],
-                videoHeight: videoHeight,
-              );
+        elevation: 0,
+        title: Text(
+          'Ma Collection',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.deepPurple.shade800,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.search),
+            onPressed: () {
+              // Implémentation de la recherche
             },
-          );
-        },
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.deepPurple.shade800,
+              Colors.deepPurple.shade200,
+            ],
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: videoPaths.length,
+              itemBuilder: (context, index) {
+                double screenWidth = MediaQuery.of(context).size.width;
+                double videoHeight = screenWidth > 600 ? 400 : 250;
+
+                return Card(
+                  elevation: 8,
+                  margin: EdgeInsets.only(bottom: 20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                        child: EnhancedVideoPlayer(
+                          videoPath: videoPaths[index],
+                          videoHeight: videoHeight,
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Vidéo ${index + 1}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.favorite_border),
+                                  onPressed: () {},
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.share),
+                                  onPressed: () {},
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-class VideoPlayerItem extends StatefulWidget {
+class EnhancedVideoPlayer extends StatefulWidget {
   final String videoPath;
   final double videoHeight;
 
-  VideoPlayerItem({required this.videoPath, required this.videoHeight});
+  EnhancedVideoPlayer({required this.videoPath, required this.videoHeight});
 
   @override
-  _VideoPlayerItemState createState() => _VideoPlayerItemState();
+  _EnhancedVideoPlayerState createState() => _EnhancedVideoPlayerState();
 }
 
-class _VideoPlayerItemState extends State<VideoPlayerItem> {
+class _EnhancedVideoPlayerState extends State<EnhancedVideoPlayer> {
   late VideoPlayerController _controller;
+  bool _isFullScreen = false;
   bool _isPlaying = false;
+  bool _isInitialized = false;
+  double _progress = 0.0;
 
   @override
   void initState() {
     super.initState();
     _controller = VideoPlayerController.asset(widget.videoPath)
       ..initialize().then((_) {
-        setState(() {});
+        setState(() {
+          _isInitialized = true;
+        });
+        _controller.addListener(() {
+          if (mounted) {
+            setState(() {
+              _progress = _controller.value.position.inMilliseconds /
+                  _controller.value.duration.inMilliseconds;
+            });
+          }
+        });
       });
   }
 
@@ -66,6 +149,22 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _toggleFullScreen() {
+    setState(() {
+      _isFullScreen = !_isFullScreen;
+    });
+    if (_isFullScreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft
+      ]);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
   }
 
   void _togglePlayPause() {
@@ -79,81 +178,143 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
     });
   }
 
-  void _skipVideo() {
-    // Skip to the next video (if any)
-    Navigator.of(context).pop();
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String minutes = twoDigits(duration.inMinutes.remainder(60));
+    String seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$minutes:$seconds";
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(15.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: Offset(0, 3), // Position de l'ombre
-            ),
-          ],
+    if (!_isInitialized) {
+      return Container(
+        height: widget.videoHeight,
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+          ),
         ),
-        child: Column(
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: _controller.value.isInitialized
-                  ? AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              )
-                  : Container(
-                height: widget.videoHeight,
-                color: Colors.black12,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: VideoProgressIndicator(
-                _controller,
-                allowScrubbing: true,
-                colors: const VideoProgressColors(
-                  playedColor: Colors.deepPurple,
-                  bufferedColor: Colors.purpleAccent,
-                  backgroundColor: Colors.grey,
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: _isFullScreen ? MediaQuery.of(context).size.height : widget.videoHeight,
+      color: Colors.black,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+          // Contrôles vidéo
+          AnimatedOpacity(
+            opacity: 1.0,
+            duration: Duration(milliseconds: 300),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black54,
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black54,
+                  ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      size: 30,
-                      color: Colors.deepPurple,
+                  // Bouton Plein écran
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                          color: Colors.white,
+                        ),
+                        onPressed: _toggleFullScreen,
+                      ),
                     ),
-                    onPressed: _togglePlayPause,
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.skip_next,
-                      size: 30,
-                      color: Colors.deepPurple,
+                  // Contrôles bas de vidéo
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Barre de progression
+                          SliderTheme(
+                            data: SliderThemeData(
+                              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+                              overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
+                              activeTrackColor: Colors.deepPurple,
+                              inactiveTrackColor: Colors.grey[300],
+                              thumbColor: Colors.deepPurple,
+                            ),
+                            child: Slider(
+                              value: _progress,
+                              onChanged: (value) {
+                                final duration = _controller.value.duration;
+                                final position = duration * value;
+                                _controller.seekTo(position);
+                              },
+                            ),
+                          ),
+                          // Boutons de contrôle et durée
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                    onPressed: _togglePlayPause,
+                                  ),
+                                  Text(
+                                    '${_formatDuration(_controller.value.position)} / ${_formatDuration(_controller.value.duration)}',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.volume_up, color: Colors.white),
+                                    onPressed: () {
+                                      // Contrôle du volume à implémenter
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    onPressed: _skipVideo,
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
